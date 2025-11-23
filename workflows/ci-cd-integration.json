@@ -1,0 +1,204 @@
+{
+  "name": "SDLC - CI/CD Integration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "git-webhook",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "git-webhook",
+      "name": "Git Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "git-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.ref }}",
+              "operation": "contains",
+              "value2": "refs/heads/"
+            }
+          ]
+        }
+      },
+      "id": "check-push",
+      "name": "Check if Push Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "runTests",
+        "repository": "={{ $json.repository.full_name }}",
+        "branch": "={{ $json.ref.split('/').pop() }}",
+        "additionalFields": {}
+      },
+      "id": "trigger-tests",
+      "name": "Trigger Automated Tests",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 200],
+      "credentials": {},
+      "notes": "Configure with your CI platform API (GitHub Actions, GitLab CI, Jenkins, etc.)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Run code quality checks\nconst branch = $input.item.json.ref.split('/').pop();\nconst repo = $input.item.json.repository.full_name;\n\n// Call code quality tools (ESLint, SonarQube, etc.)\nreturn [{\n  json: {\n    branch,\n    repo,\n    qualityCheck: 'pending',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-quality",
+      "name": "Code Quality Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.ref }}",
+              "operation": "contains",
+              "value2": "refs/heads/main"
+            }
+          ]
+        }
+      },
+      "id": "check-main-branch",
+      "name": "Check if Main Branch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "operation": "build",
+        "repository": "={{ $json.repository.full_name }}",
+        "environment": "staging",
+        "additionalFields": {}
+      },
+      "id": "build-staging",
+      "name": "Build for Staging",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 100],
+      "notes": "Configure with your build/deployment platform"
+    },
+    {
+      "parameters": {
+        "operation": "deploy",
+        "environment": "staging",
+        "version": "={{ $json.after.substring(0, 7) }}",
+        "additionalFields": {}
+      },
+      "id": "deploy-staging",
+      "name": "Deploy to Staging",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 100],
+      "notes": "Configure with your deployment platform (Kubernetes, Docker, etc.)"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ '✅ Deployment to staging successful\\n🔗 Commit: ' + $json.after + '\\n📦 Repository: ' + $json.repository.full_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-deployment",
+      "name": "Notify Deployment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 100],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.CI_PLATFORM_API_URL }}/status",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "branch",
+              "value": "={{ $json.ref.split('/').pop() }}"
+            },
+            {
+              "name": "status",
+              "value": "running"
+            },
+            {
+              "name": "commit",
+              "value": "={{ $json.after }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-pr-status",
+      "name": "Update PR Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 400],
+      "notes": "Update PR with test and quality check status"
+    }
+  ],
+  "connections": {
+    "Git Webhook": {
+      "main": [[{"node": "Check if Push Event", "type": "main", "index": 0}]]
+    },
+    "Check if Push Event": {
+      "main": [
+        [
+          {"node": "Trigger Automated Tests", "type": "main", "index": 0},
+          {"node": "Code Quality Check", "type": "main", "index": 0}
+        ],
+        []
+      ]
+    },
+    "Trigger Automated Tests": {
+      "main": [[{"node": "Check if Main Branch", "type": "main", "index": 0}]]
+    },
+    "Code Quality Check": {
+      "main": [[{"node": "Update PR Status", "type": "main", "index": 0}]]
+    },
+    "Check if Main Branch": {
+      "main": [
+        [
+          {"node": "Build for Staging", "type": "main", "index": 0}
+        ],
+        []
+      ]
+    },
+    "Build for Staging": {
+      "main": [[{"node": "Deploy to Staging", "type": "main", "index": 0}]]
+    },
+    "Deploy to Staging": {
+      "main": [[{"node": "Notify Deployment", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

@@ -1,0 +1,180 @@
+{
+  "name": "SDLC - Notifications & Collaboration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sdlc-notifications",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "notification-webhook",
+      "name": "Notification Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "notification-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "event-type-check",
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "pr_created",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "event-type-check-2",
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "pr_merged",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "event-type-check-3",
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "deployment",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "route-events",
+      "name": "Route Events",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🔵 New Pull Request\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*PR: {{ $json.pr_title }}*\\n📝 {{ $json.pr_description }}\\n👤 Author: {{ $json.author }}\\n🔗 <{{ $json.pr_url }}|View PR>\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "slack-pr-notification",
+      "name": "Slack - PR Created",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 100],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"✅ Pull Request Merged\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*PR Merged: {{ $json.pr_title }}*\\n🔀 Branch: {{ $json.branch }}\\n👤 Merged by: {{ $json.merged_by }}\\n🚀 Deployment will start automatically\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "slack-merge-notification",
+      "name": "Slack - PR Merged",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 300],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🚀 Deployment Status\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Environment: {{ $json.environment }}*\\n📍 Status: {{ $json.status }}\\n📦 Version: {{ $json.version }}\\n👤 Deployed by: {{ $json.deployed_by }}\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "slack-deployment-notification",
+      "name": "Slack - Deployment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [650, 500],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.MICROSOFT_TEAMS_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"0078D4\",\n  \"summary\": \"SDLC Notification\",\n  \"sections\": [{\n    \"activityTitle\": \"{{ $json.title }}\",\n    \"activitySubtitle\": \"{{ $json.subtitle }}\",\n    \"facts\": [\n      {\n        \"name\": \"Type:\",\n        \"value\": \"{{ $json.event_type }}\"\n      },\n      {\n        \"name\": \"Time:\",\n        \"value\": \"{{ $now }}\"\n      }\n    ],\n    \"markdown\": true\n  }]\n}",
+        "options": {}
+      },
+      "id": "teams-notification",
+      "name": "Teams Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create JIRA ticket for code review reminder\nconst eventType = $input.item.json.event_type;\nconst prTitle = $input.item.json.pr_title || '';\nconst author = $input.item.json.author || '';\n\nif (eventType === 'pr_created') {\n  return [{\n    json: {\n      project: 'DEV',\n      summary: `Code Review Needed: ${prTitle}`,\n      description: `A new PR has been created and needs review.\\n\\nPR Title: ${prTitle}\\nAuthor: ${author}\\n\\nPlease review at your earliest convenience.`,\n      issueType: 'Task',\n      assignee: 'review-team',\n      priority: 'Medium'\n    }\n  }];\n}\n\nreturn [];"
+      },
+      "id": "create-jira-task",
+      "name": "Create JIRA Task",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 100],
+      "disabled": true,
+      "notes": "Configure JIRA integration if using JIRA for task management"
+    }
+  ],
+  "connections": {
+    "Notification Webhook": {
+      "main": [[{"node": "Route Events", "type": "main", "index": 0}]]
+    },
+    "Route Events": {
+      "main": [
+        [
+          {"node": "Slack - PR Created", "type": "main", "index": 0},
+          {"node": "Create JIRA Task", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Slack - PR Merged", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Slack - Deployment", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Slack - PR Created": {
+      "main": [[{"node": "Teams Notification", "type": "main", "index": 0}]]
+    },
+    "Slack - PR Merged": {
+      "main": [[{"node": "Teams Notification", "type": "main", "index": 0}]]
+    },
+    "Slack - Deployment": {
+      "main": [[{"node": "Teams Notification", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

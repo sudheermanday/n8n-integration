@@ -1,0 +1,185 @@
+{
+  "name": "SDLC - Feature Development Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "feature-request",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook - Feature Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "feature-request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.action }}",
+              "operation": "equals",
+              "value2": "create_feature"
+            }
+          ]
+        }
+      },
+      "id": "check-action",
+      "name": "Check Action",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "createBranch",
+        "repository": "={{ $json.body.repository }}",
+        "branchName": "feature/{{ $json.body.ticket_id }}-{{ $json.body.feature_name }}",
+        "additionalFields": {
+          "baseBranch": "main"
+        }
+      },
+      "id": "create-branch",
+      "name": "Create Feature Branch",
+      "type": "@n8n/n8n-nodes-langchain.github",
+      "typeVersion": 1,
+      "position": [650, 200],
+      "credentials": {
+        "githubApi": {
+          "id": "github-credentials",
+          "name": "GitHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate boilerplate code based on feature type\nconst featureType = $input.item.json.body.feature_type || 'api';\nconst featureName = $input.item.json.body.feature_name;\nconst ticketId = $input.item.json.body.ticket_id;\n\nlet files = [];\n\nif (featureType === 'api') {\n  files = [\n    {\n      path: `src/routes/${featureName}.js`,\n      content: `// ${ticketId}: ${featureName}\nconst express = require('express');\nconst router = express.Router();\n\n// GET /api/${featureName}\nrouter.get('/', async (req, res) => {\n  try {\n    // Implementation here\n    res.json({ message: '${featureName} endpoint' });\n  } catch (error) {\n    res.status(500).json({ error: error.message });\n  }\n});\n\nmodule.exports = router;\n`\n    },\n    {\n      path: `src/controllers/${featureName}Controller.js`,\n      content: `// ${ticketId}: ${featureName} Controller\nexports.get${featureName.charAt(0).toUpperCase() + featureName.slice(1)} = async (req, res) => {\n  // Implementation here\n};\n`\n    },\n    {\n      path: `tests/${featureName}.test.js`,\n      content: `// ${ticketId}: ${featureName} Tests\ndescribe('${featureName}', () => {\n  it('should work correctly', () => {\n    // Test implementation\n  });\n});\n`\n    }\n  ];\n} else if (featureType === 'ui') {\n  files = [\n    {\n      path: `src/components/${featureName}/${featureName}.jsx`,\n      content: `// ${ticketId}: ${featureName} Component\nimport React from 'react';\n\nconst ${featureName.charAt(0).toUpperCase() + featureName.slice(1)} = () => {\n  return (\n    <div>\n      {/* ${featureName} component */}\n    </div>\n  );\n};\n\nexport default ${featureName.charAt(0).toUpperCase() + featureName.slice(1)};\n`\n    },\n    {\n      path: `src/components/${featureName}/index.js`,\n      content: `export { default } from './${featureName}';\n`\n    }\n  ];\n}\n\nreturn files.map(file => ({\n  json: file\n}));"
+      },
+      "id": "generate-boilerplate",
+      "name": "Generate Boilerplate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "repository": "={{ $json.body.repository }}",
+        "branch": "feature/{{ $json.body.ticket_id }}-{{ $json.body.feature_name }}",
+        "filePath": "={{ $json.path }}",
+        "fileContent": "={{ $json.content }}",
+        "commitMessage": "={{ 'Initial commit for ' + $json.body.feature_name }}",
+        "additionalFields": {}
+      },
+      "id": "create-files",
+      "name": "Create Files in Repo",
+      "type": "@n8n/n8n-nodes-langchain.github",
+      "typeVersion": 1,
+      "position": [1050, 200],
+      "credentials": {
+        "githubApi": {
+          "id": "github-credentials",
+          "name": "GitHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "repository": "={{ $json.body.repository }}",
+        "title": "={{ $json.body.ticket_id }}: {{ $json.body.feature_name }}",
+        "head": "={{ 'feature/' + $json.body.ticket_id + '-' + $json.body.feature_name }}",
+        "base": "main",
+        "body": "={{ '## Description\\n' + ($json.body.description || 'No description provided') + '\\n\\n## Checklist\\n- [ ] Code implemented\\n- [ ] Tests added\\n- [ ] Documentation updated\\n\\n## Related Ticket\\n' + $json.body.ticket_id }}",
+        "additionalFields": {}
+      },
+      "id": "create-pr",
+      "name": "Create Pull Request",
+      "type": "@n8n/n8n-nodes-langchain.github",
+      "typeVersion": 1,
+      "position": [1250, 200],
+      "credentials": {
+        "githubApi": {
+          "id": "github-credentials",
+          "name": "GitHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ '🚀 New feature branch created: `' + $json.body.feature_name + '`\\n📝 PR: ' + $json.html_url + '\\n👤 Developer: ' + ($json.body.developer || 'Unknown') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-slack",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1450, 200],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, message: 'Feature branch created successfully', branch: 'feature/' + $json.body.ticket_id + '-' + $json.body.feature_name, pr_url: $json.html_url } }}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Feature Request": {
+      "main": [[{"node": "Check Action", "type": "main", "index": 0}]]
+    },
+    "Check Action": {
+      "main": [
+        [
+          {"node": "Create Feature Branch", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Respond to Webhook", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Create Feature Branch": {
+      "main": [[{"node": "Generate Boilerplate", "type": "main", "index": 0}]]
+    },
+    "Generate Boilerplate": {
+      "main": [[{"node": "Create Files in Repo", "type": "main", "index": 0}]]
+    },
+    "Create Files in Repo": {
+      "main": [[{"node": "Create Pull Request", "type": "main", "index": 0}]]
+    },
+    "Create Pull Request": {
+      "main": [[{"node": "Notify Slack", "type": "main", "index": 0}]]
+    },
+    "Notify Slack": {
+      "main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+

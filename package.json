@@ -1,0 +1,27 @@
+{
+  "name": "n8n-sdlc-integration",
+  "version": "1.0.0",
+  "description": "n8n.io workflows for SDLC automation and fast-tracking feature development",
+  "main": "index.js",
+  "scripts": {
+    "setup-webhook": "node scripts/setup-webhook.js",
+    "generate-boilerplate": "node scripts/generate-boilerplate.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "n8n",
+    "sdlc",
+    "automation",
+    "ci-cd",
+    "workflow",
+    "devops"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
+

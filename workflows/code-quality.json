@@ -1,0 +1,154 @@
+{
+  "name": "SDLC - Code Quality & Review",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "code-quality-check",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Code Quality Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "code-quality-check"
+    },
+    {
+      "parameters": {
+        "operation": "getFileContent",
+        "repository": "={{ $json.repository }}",
+        "filePath": "={{ $json.file_path }}",
+        "branch": "={{ $json.branch }}",
+        "additionalFields": {}
+      },
+      "id": "fetch-code",
+      "name": "Fetch Changed Files",
+      "type": "@n8n/n8n-nodes-langchain.github",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "githubApi": {
+          "id": "github-credentials",
+          "name": "GitHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Run ESLint checks\nconst code = $input.item.json.content;\nconst filePath = $input.item.json.file_path;\n\n// Simulate ESLint checks (in production, call actual ESLint API)\nconst issues = [];\n\n// Check for common issues\nif (code.includes('console.log')) {\n  issues.push({\n    line: code.split('\\n').findIndex(l => l.includes('console.log')) + 1,\n    severity: 'warning',\n    message: 'console.log should be removed before production',\n    rule: 'no-console'\n  });\n}\n\nif (code.includes('var ')) {\n  issues.push({\n    line: code.split('\\n').findIndex(l => l.includes('var ')) + 1,\n    severity: 'error',\n    message: 'Use let or const instead of var',\n    rule: 'no-var'\n  });\n}\n\nreturn [{\n  json: {\n    file: filePath,\n    issues: issues,\n    severity: issues.length > 0 ? (issues.some(i => i.severity === 'error') ? 'error' : 'warning') : 'success',\n    totalIssues: issues.length\n  }\n}];"
+      },
+      "id": "run-eslint",
+      "name": "Run ESLint",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check code complexity and maintainability\nconst code = $input.all()[0].json.content;\nconst lines = code.split('\\n');\n\n// Calculate metrics\nconst complexity = {\n  linesOfCode: lines.length,\n  functionCount: (code.match(/function\\s+\\w+/g) || []).length,\n  cyclomaticComplexity: 1 + (code.match(/if|else|for|while|switch|catch/g) || []).length\n};\n\n// Determine if code needs refactoring\nlet needsRefactoring = false;\nlet suggestions = [];\n\nif (complexity.cyclomaticComplexity > 10) {\n  needsRefactoring = true;\n  suggestions.push('Cyclomatic complexity is high. Consider breaking down this function.');\n}\n\nif (complexity.linesOfCode > 200) {\n  needsRefactoring = true;\n  suggestions.push('File is quite large. Consider splitting into smaller modules.');\n}\n\nreturn [{\n  json: {\n    ...complexity,\n    needsRefactoring,\n    suggestions\n  }\n}];"
+      },
+      "id": "complexity-check",
+      "name": "Complexity Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.severity }}",
+              "operation": "equals",
+              "value2": "error"
+            }
+          ]
+        }
+      },
+      "id": "check-errors",
+      "name": "Check for Errors",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "repository": "={{ $json.repository }}",
+        "pullRequestNumber": "={{ $json.pr_number }}",
+        "body": "={{ '## Code Quality Report\\n\\n' + ($json.severity === 'error' ? '❌ **Errors Found**\\n' : '⚠️ **Warnings Found**\\n') + '\\n### Issues:\\n' + $json.issues.map(i => `- **Line ${i.line}**: ${i.message} (${i.rule})`).join('\\n') + '\\n\\n### Suggestions:\\n' + ($json.suggestions || []).join('\\n') }}",
+        "additionalFields": {
+          "commentOn": "pr"
+        }
+      },
+      "id": "comment-on-pr",
+      "name": "Comment on PR",
+      "type": "@n8n/n8n-nodes-langchain.github",
+      "typeVersion": 1,
+      "position": [1050, 200],
+      "credentials": {
+        "githubApi": {
+          "id": "github-credentials",
+          "name": "GitHub API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.severity === 'error' ? '❌' : '⚠️' }} Code Quality Issues Found\",\n  \"blocks\": [\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*File:* {{ $json.file }}\\n*Issues:* {{ $json.totalIssues }}\\n*Severity:* {{ $json.severity }}\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "notify-quality-issues",
+      "name": "Notify Quality Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1050, 400],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Code Quality Webhook": {
+      "main": [[{"node": "Fetch Changed Files", "type": "main", "index": 0}]]
+    },
+    "Fetch Changed Files": {
+      "main": [
+        [
+          {"node": "Run ESLint", "type": "main", "index": 0},
+          {"node": "Complexity Analysis", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Run ESLint": {
+      "main": [[{"node": "Check for Errors", "type": "main", "index": 0}]]
+    },
+    "Check for Errors": {
+      "main": [
+        [
+          {"node": "Comment on PR", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Notify Quality Issues", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Complexity Analysis": {
+      "main": [[{"node": "Comment on PR", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
+
