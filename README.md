@@ -40,6 +40,30 @@ Integrate n8n.io into your SDLC to automate repetitive tasks and accelerate feat
 
 ## 🛠️ Setup Instructions
 
+### Docker Setup (Recommended)
+
+**Quick start with Docker:**
+
+**Windows PowerShell:**
+```powershell
+.\docker-setup.ps1 -Start
+```
+
+**Linux/Mac:**
+```bash
+chmod +x docker-setup.sh
+./docker-setup.sh --start
+```
+
+**Or use Docker Compose directly:**
+```bash
+docker compose up -d
+```
+
+Access n8n at: `http://localhost:5678`
+- Username: `admin`
+- Password: `changeme` (change in `.env` file)
+
 ### Quick Setup (Automated)
 
 **Use the setup script for automated installation:**
@@ -137,11 +161,16 @@ See `GIT_SETUP.md` for detailed git setup instructions.
 ├── docs/                  # Documentation
 │   ├── setup-guide.md
 │   └── workflow-examples.md
-├── setup.ps1              # Windows PowerShell setup script
-├── setup.sh               # Linux/Mac Bash setup script
-├── setup.bat              # Windows CMD setup script
-├── git-setup.ps1          # Git initialization and push (PowerShell)
-├── git-setup.sh           # Git initialization and push (Bash)
+├── docker-compose.yml     # Docker Compose configuration
+├── Dockerfile             # Custom Docker image (optional)
+├── docker-setup.ps1      # Docker management (PowerShell)
+├── docker-setup.sh       # Docker management (Bash)
+├── .dockerignore         # Docker ignore file
+├── setup.ps1             # Windows PowerShell setup script
+├── setup.sh              # Linux/Mac Bash setup script
+├── setup.bat             # Windows CMD setup script
+├── git-setup.ps1         # Git initialization and push (PowerShell)
+├── git-setup.sh          # Git initialization and push (Bash)
 ├── SETUP_SCRIPTS.md       # Setup scripts documentation
 ├── GIT_SETUP.md           # Git setup and push guide
 ├── QUICKSTART.md          # Quick start guide

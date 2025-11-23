@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  n8n:
+    # Use custom Dockerfile instead of base image
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: n8n-sdlc-integration:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic configuration
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
+      
+      # Webhook configuration
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      
+      # Database (optional - uses SQLite by default)
+      # Uncomment to use PostgreSQL:
+      # - DB_TYPE=postgresdb
+      # - DB_POSTGRESDB_HOST=postgres
+      # - DB_POSTGRESDB_PORT=5432
+      # - DB_POSTGRESDB_DATABASE=n8n
+      # - DB_POSTGRESDB_USER=n8n
+      # - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-n8n}
+      
+      # Encryption key (generate a new one for production)
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
+      
+      # Timezone
+      - GENERIC_TIMEZONE=${TZ:-UTC}
+      - TZ=${TZ:-UTC}
+      
+      # Environment variables from .env file (for SDLC integration)
+      - GIT_PLATFORM_TOKEN=${GIT_PLATFORM_TOKEN:-}
+      - GIT_PLATFORM=${GIT_PLATFORM:-github}
+      - REPO_OWNER=${REPO_OWNER:-}
+      - REPO_NAME=${REPO_NAME:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - MICROSOFT_TEAMS_WEBHOOK_URL=${MICROSOFT_TEAMS_WEBHOOK_URL:-}
+      - CI_PLATFORM_API_URL=${CI_PLATFORM_API_URL:-}
+      - CI_PLATFORM_API_KEY=${CI_PLATFORM_API_KEY:-}
+      - JIRA_URL=${JIRA_URL:-}
+      - JIRA_EMAIL=${JIRA_EMAIL:-}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN:-}
+      
+      # Node.js environment (for scripts)
+      - NODE_ENV=production
+      
+      # SDLC Integration paths
+      - SDLC_WORKFLOWS_PATH=/home/node/.n8n/workflows
+      - SDLC_SCRIPTS_PATH=/home/node/.n8n/scripts
+      - SDLC_TEMPLATES_PATH=/home/node/.n8n/templates
+    volumes:
+      # Persist n8n data (workflows, credentials, etc.)
+      - n8n_data:/home/node/.n8n
+      # Mount workflows directory (allows easy updates without rebuilding)
+      - ./workflows:/home/node/.n8n/workflows:ro
+      # Mount scripts directory (allows easy updates)
+      - ./scripts:/home/node/.n8n/scripts:ro
+      # Mount templates directory
+      - ./templates:/home/node/.n8n/templates:ro
+    networks:
+      - n8n-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Optional: Resource limits
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '1'
+    #       memory: 1G
+
+  # Optional: PostgreSQL database (uncomment if you want to use PostgreSQL instead of SQLite)
+  # postgres:
+  #   image: postgres:14-alpine
+  #   container_name: n8n-postgres
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_DB=n8n
+  #     - POSTGRES_USER=n8n
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-n8n}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - n8n-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U n8n"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+volumes:
+  n8n_data:
+    driver: local
+    name: n8n-sdlc-integration_data
+  # postgres_data:
+  #   driver: local
+  #   name: n8n-sdlc-integration_postgres_data
+
+networks:
+  n8n-network:
+    driver: bridge
+    name: n8n-sdlc-integration_network

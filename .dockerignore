@@ -1,0 +1,87 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Node modules (not needed in container)
+node_modules/
+npm-debug.log
+yarn.lock
+package-lock.json
+
+# Environment files (passed via docker-compose)
+.env
+.env.local
+.env.*.local
+
+# n8n data (will be in volume)
+.n8n/
+n8n_data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Documentation (optional - comment out if you want to include)
+docs/
+*.md
+!README.md
+
+# Test files
+*.test.js
+*.test.sh
+*.test.ps1
+*.spec.js
+test-*.ps1
+test-*.sh
+TEST*.md
+
+# Scripts (we copy these, but ignore test scripts)
+*test*.ps1
+*test*.sh
+fix-*.ps1
+fix-*.sh
+
+# Setup scripts (not needed in container)
+setup.ps1
+setup.sh
+setup.bat
+docker-setup.ps1
+docker-setup.sh
+git-setup.ps1
+git-setup.sh
+
+# Output directories
+output/
+dist/
+build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Secrets (should never be in container)
+*.pem
+*.key
+secrets/
+credentials/
+
+# Docker files themselves
+docker-compose.yml
+Dockerfile
+.dockerignore
